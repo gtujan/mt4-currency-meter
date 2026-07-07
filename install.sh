@@ -1864,11 +1864,10 @@ ___CM_EOF___
 cat > "$CM_DIR/README.md" <<'___CM_EOF___'
 # Currency Strength Meter
 
-Reproduces the `OPENBIDASK` tab of `Excel-Currency-Meter-2026.xlsx` as a
-small web app, fed live from MetaTrader 4 over native `WebRequest()` HTTP
+A small web app, fed live from MetaTrader 4 over native `WebRequest()` HTTP
 POST — no DDE, no ZeroMQ, no DLL. All math (ranks, strengths, signals,
-gauges, momentum) runs in Python (`bridge/meter.py`), matching the
-workbook's hidden `MAIN` sheet exactly. The browser only renders.
+gauges, momentum) runs in Python (`bridge/meter.py`), fetching bid and ask values from MT4 and 
+renders it on the browser. No need for Excel.
 
 ## Install
 
