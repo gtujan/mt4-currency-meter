@@ -30,6 +30,6 @@ void OnStart()
    TestOne("HTTPS-EXT ", "https://www.google.com");
    TestOne("HTTP-EXT  ", "http://example.com");
    TestOne("HTTP-EXT80", "http://neverssl.com");
-   TestOne("LOCAL-IP  ", "http://192.168.68.103:8010/state");
+   TestOne("LOCAL-IP  ", "http://192.168.1.100:8010/state"); // <- set to your Mac's LAN IP
 }
 //+------------------------------------------------------------------+
