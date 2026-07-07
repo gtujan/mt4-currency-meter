@@ -11,11 +11,10 @@ workbook's hidden `MAIN` sheet exactly. The browser only renders.
 One-line install (recreates the project, sets up a venv, installs deps):
 
 ```bash
-curl -fsSL https://<your-host>/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gtujan/mt4-currency-meter/main/install.sh | bash
 ```
 
-Replace `<your-host>` with wherever you host `install.sh` (e.g. a GitHub raw
-URL). Installs into `~/currency_meter` by default; override with
+Installs into `~/currency_meter` by default; override with
 `CM_DIR=/path curl -fsSL … | bash`. The script is self-contained — it embeds
 every source file, so no `git clone` is needed. You can also just download
 `install.sh` and run `bash install.sh`.
