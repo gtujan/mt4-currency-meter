@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Currency Strength Meter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* ---- design tokens (dataviz reference palette; both modes selected) ---- */
+  :root, :root[data-theme="dark"] {
+    --plane:      #0d0d0d;
+    --surface:    #1a1a19;
+    --surface-2:  #222221;
+    --ink:        #ffffff;
+    --ink-2:      #c3c2b7;
+    --muted:      #898781;
+    --grid:       #2c2c2a;
+    --axis:       #383835;
+    --border:     rgba(255,255,255,0.10);
+    --good:       #0ca30c;
+    --good-text:  #2fbd2f;
+    --critical:   #e0574f;
+    --warning:    #fab219;
+    --neutral:    #6b7280;
+    /* categorical currency hues (dark steps), fixed order USD..JPY */
+    --c-USD: #3987e5; --c-EUR: #199e70; --c-GBP: #c98500; --c-CHF: #2e9e2e;
+    --c-CAD: #9085e9; --c-AUD: #e66767; --c-NZD: #d55181; --c-JPY: #d95926;
+    --c-XAU: #e0b64a;
+  }
+  :root[data-theme="light"] {
+    --plane:      #f2f2ef;
+    --surface:    #fcfcfb;
+    --surface-2:  #f4f4f1;
+    --ink:        #0b0b0b;
+    --ink-2:      #52514e;
+    --muted:      #898781;
+    --grid:       #e1e0d9;
+    --axis:       #c3c2b7;
+    --border:     rgba(11,11,11,0.10);
+    --good:       #0ca30c;
+    --good-text:  #067a06;
+    --critical:   #d03b3b;
+    --warning:    #b9820a;
+    --neutral:    #6b7280;
+    --c-USD: #2a78d6; --c-EUR: #1baf7a; --c-GBP: #c98500; --c-CHF: #008300;
+    --c-CAD: #4a3aa7; --c-AUD: #e34948; --c-NZD: #d5477f; --c-JPY: #d9531f;
+    --c-XAU: #b7891f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--plane);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 0 20px 40px;
+  }
+  .wrap { max-width: 1260px; margin: 0 auto; }
+
+  /* ---- header ---- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 0 12px;
+    background: color-mix(in srgb, var(--plane) 88%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  header .title { font-size: 17px; font-weight: 650; letter-spacing: 0.01em; }
+  header .title .sub { display:block; font-weight: 400; font-size: 11.5px; color: var(--muted); letter-spacing: 0.02em; }
+  header .spacer { flex: 1; }
+  .limits { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .limits b { color: var(--ink); }
+  .limits .up { color: var(--good-text); }
+  .limits .dn { color: var(--critical); }
+  .status { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--neutral); box-shadow: 0 0 0 3px color-mix(in srgb, var(--neutral) 25%, transparent); }
+  .status.live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); animation: pulse 2s infinite; }
+  .status.stale .dot { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 25%, transparent); }
+  .status.down .dot { background: var(--critical); box-shadow: 0 0 0 3px color-mix(in srgb, var(--critical) 25%, transparent); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
+  .clock { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tbtn {
+    background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--border);
+    border-radius: 7px; width: 32px; height: 30px; cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .tbtn:hover { color: var(--ink); }
+
+  .banner {
+    display: none; align-items: center; gap: 8px;
+    background: color-mix(in srgb, var(--critical) 16%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--critical) 45%, transparent);
+    color: var(--ink); padding: 9px 14px; border-radius: 8px; margin-bottom: 18px;
+    font-size: 13px; font-weight: 600;
+  }
+  .banner.show { display: flex; }
+
+  /* ---- cards ---- */
+  .app { display: grid; grid-template-columns: minmax(320px, 0.82fr) minmax(0, 1.6fr); gap: 18px; align-items: start; }
+  @media (max-width: 1000px) { .app { grid-template-columns: 1fr; } }
+  .left { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 16px 14px;
+    display: flex; flex-direction: column;
+  }
+  .card > h2 {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em;
+    color: var(--muted); font-weight: 700; margin: 0 0 14px;
+  }
+  .card > h2 .note { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 11px; }
+
+  /* ---- strength leaderboard ---- */
+  #leaderboard { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+  .lb-row { display: grid; grid-template-columns: 20px 46px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 5px 0; cursor: default; }
+  .lb-rank { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .lb-track { position: relative; height: 20px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
+  .lb-fill { height: 100%; border-radius: 5px; transition: width .35s cubic-bezier(.2,.7,.2,1); }
+  .lb-val { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; display: flex; align-items: center; justify-content: flex-end; }
+  .mtag { font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em; padding: 1px 5px; border-radius: 4px; margin-left: 6px; vertical-align: middle; }
+  .mtag.STRONG { color: var(--good-text); background: color-mix(in srgb, var(--good) 20%, transparent); }
+  .mtag.WEAK { color: var(--critical); background: color-mix(in srgb, var(--critical) 18%, transparent); }
+
+  /* ---- momentum cards ---- */
+  .mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; flex: 1; }
+  @media (max-width: 520px) { .mgrid { grid-template-columns: 1fr; } }
+  .mcard { background: var(--surface-2); border: 1px solid var(--border); border-left-width: 3px; border-radius: 8px; padding: 8px 10px; }
+  .mcard .top { display: flex; align-items: baseline; justify-content: space-between; }
+  .mcard .name { font-size: 11px; color: var(--muted); }
+  .mcard .code { font-weight: 750; }
+  .mcard .big { font-size: 20px; font-weight: 700; margin: 1px 0 3px; font-variant-numeric: tabular-nums; }
+  .mcard .big small { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .mbar { height: 5px; border-radius: 3px; background: var(--surface); overflow: hidden; }
+  .mbar > div { height: 100%; border-radius: 3px; }
+  .mcard .idx { font-size: 11px; color: var(--muted); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .mcard .state { font-weight: 700; font-size: 10px; letter-spacing: 0.05em; }
+  .st-STRONG { color: var(--good-text); }
+  .st-WEAK { color: var(--critical); }
+  .st-NEUTRAL { color: var(--muted); }
+
+  /* ---- filter pills ---- */
+  .pills { display: flex; gap: 6px; margin-left: auto; }
+  .pill { font: inherit; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+    border: 1px solid var(--border); background: transparent; color: var(--ink-2); cursor: pointer; }
+  .pill:hover { color: var(--ink); }
+  .pill.on { background: var(--ink); color: var(--plane); border-color: var(--ink); }
+
+  /* ---- signals table ---- */
+  .tscroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 640px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; text-transform: uppercase;
+    font-size: 10px; letter-spacing: 0.05em; padding: 6px 9px; border-bottom: 1px solid var(--axis);
+    white-space: nowrap; cursor: pointer; user-select: none; }
+  th.sortable:hover { color: var(--ink); }
+  th .arw { opacity: 0.5; font-size: 9px; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td { padding: 3.5px 9px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  tbody tr { border-left: 3px solid transparent; }
+  tbody tr:hover { background: var(--surface-2); }
+  tr.inactive td { color: var(--muted); opacity: 0.6; }
+  tr.gold td { background: color-mix(in srgb, var(--c-XAU) 8%, transparent); }
+  .pair-name { font-weight: 700; letter-spacing: 0.01em; }
+  .qtag { color: var(--muted); font-weight: 500; }
+  .sig { display: inline-block; padding: 2px 9px; border-radius: 5px; font-weight: 750; font-size: 10.5px; letter-spacing: 0.03em; }
+  .sig-BUY { background: color-mix(in srgb, var(--good) 20%, transparent); color: var(--good-text); }
+  .sig-SELL { background: color-mix(in srgb, var(--critical) 20%, transparent); color: var(--critical); }
+  .sig-WAIT { background: color-mix(in srgb, var(--neutral) 22%, transparent); color: var(--ink-2); }
+  .meter-cell { display: inline-flex; align-items: center; gap: 6px; }
+  .delta-pos { color: var(--good-text); font-weight: 650; }
+  .delta-neg { color: var(--critical); font-weight: 650; }
+  .delta-zero { color: var(--muted); }
+  /* day-range viz */
+  .range { display: grid; grid-template-columns: 52px 1fr 52px; align-items: center; gap: 7px; min-width: 190px; }
+  .range .lo, .range .hi { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .range .hi { text-align: right; }
+  .rtrack { position: relative; height: 8px; background: linear-gradient(90deg, color-mix(in srgb,var(--critical) 45%,transparent), color-mix(in srgb,var(--good) 45%,transparent)); border-radius: 5px; }
+  .rmark { position: absolute; top: 50%; width: 3px; height: 14px; border-radius: 2px; background: var(--ink); transform: translate(-50%,-50%); box-shadow: 0 0 0 2px var(--surface); }
+  .rbuy { font-size: 10px; color: var(--muted); text-align: center; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* ---- tooltip ---- */
+  #tip { position: fixed; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--axis); border-radius: 8px;
+    padding: 8px 10px; font-size: 11.5px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); max-width: 260px; }
+  #tip.show { opacity: 1; }
+  #tip .tt { font-weight: 700; margin-bottom: 4px; }
+  #tip .tr { display: flex; justify-content: space-between; gap: 14px; color: var(--ink-2); }
+  #tip .tr b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  footer { margin-top: 22px; font-size: 11px; color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="title">Currency Strength Meter</div>
+  <div class="spacer"></div>
+  <div class="limits">Signal limits &nbsp;<span class="up">BUY &ge; +<b id="lim-buy">–</b></span> &nbsp;<span class="dn">SELL &le; &minus;<b id="lim-sell">–</b></span></div>
+  <div class="clock" id="clock">–</div>
+  <div class="status down" id="status"><span class="dot"></span><span id="status-text">Connecting…</span></div>
+  <button class="tbtn" id="theme" title="Toggle light / dark">◐</button>
+</header>
+
+<div class="banner" id="banner"></div>
+
+<div class="app">
+  <div class="left">
+    <div class="card">
+      <h2>Currency Strength <span class="note">index 0–9</span></h2>
+      <div id="leaderboard"></div>
+    </div>
+
+    <div class="card">
+      <h2>Momentum <span class="note">STRONG ≥ 65% · WEAK ≤ 35%</span></h2>
+      <div class="mgrid" id="momentum"></div>
+    </div>
+  </div>
+
+  <div class="card">
+  <h2>Signals
+    <div class="pills" id="pills">
+      <button class="pill on" data-f="ALL">All</button>
+      <button class="pill" data-f="BUY">Buy</button>
+      <button class="pill" data-f="SELL">Sell</button>
+      <button class="pill" data-f="WAIT">Wait</button>
+    </div>
+  </h2>
+  <div class="tscroll">
+    <table>
+      <thead>
+        <tr>
+          <th class="sortable" data-sort="pair">Pair <span class="arw" data-for="pair"></span></th>
+          <th class="sortable" data-sort="signal">Signal <span class="arw" data-for="signal"></span></th>
+          <th class="sortable num" data-sort="sBase">Base <span class="arw" data-for="sBase"></span></th>
+          <th class="sortable num" data-sort="sQuote">Quote <span class="arw" data-for="sQuote"></span></th>
+          <th class="sortable num" data-sort="delta">&Delta; <span class="arw" data-for="delta"></span></th>
+          <th>Day range · position</th>
+          <th class="sortable num" data-sort="spread">Spread <span class="note" style="text-transform:none;letter-spacing:0">pts</span> <span class="arw" data-for="spread"></span></th>
+        </tr>
+      </thead>
+      <tbody id="signals-body"></tbody>
+    </table>
+  </div>
+  </div>
+</div>
+
+<footer id="foot">Awaiting data…</footer>
+</div>
+
+<div id="tip"></div>
+
+<script>
+const CCY_ORDER = ["USD","EUR","GBP","CHF","CAD","AUD","NZD","JPY"];
+const NAMES = {
+  USD:"US Dollar", EUR:"Euro", GBP:"British Pound", CHF:"Swiss Franc",
+  CAD:"Canadian Dollar", AUD:"Australian Dollar", NZD:"New Zealand Dollar",
+  JPY:"Japanese Yen", XAU:"Gold",
+};
+const cvar = (c) => getComputedStyle(document.documentElement).getPropertyValue("--c-"+c).trim() || "#888";
+
+const $ = (id) => document.getElementById(id);
+const statusEl = $("status"), statusText = $("status-text"), bannerEl = $("banner");
+const tip = $("tip");
+
+let lastState = null;
+let filter = "ALL";
+let sortKey = null, sortDir = -1;
+
+/* ---------- helpers ---------- */
+function fmtPrice(v, jpy) {
+  if (v === null || v === undefined) return "–";
+  return jpy ? v.toFixed(3) : v.toFixed(5);
+}
+function esc(s){ return String(s).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+/* ---------- tooltip ---------- */
+function showTip(html, ev){
+  tip.innerHTML = html; tip.classList.add("show");
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = ev.clientX + pad, y = ev.clientY + pad;
+  if (x + w > innerWidth) x = ev.clientX - w - pad;
+  if (y + h > innerHeight) y = ev.clientY - h - pad;
+  tip.style.left = x+"px"; tip.style.top = y+"px";
+}
+function hideTip(){ tip.classList.remove("show"); }
+function bindTip(el, htmlFn){
+  el.addEventListener("mousemove", (e)=>showTip(htmlFn(), e));
+  el.addEventListener("mouseleave", hideTip);
+}
+
+/* ---------- render ---------- */
+function render(state){
+  lastState = state;
+
+  // status
+  if (state.stale){
+    statusEl.className = "status stale"; statusText.textContent = "Stale";
+    bannerEl.className = "banner show";
+    bannerEl.innerHTML = "⚠&nbsp; STALE DATA — no tick received in the last few seconds (market closed or feed stopped).";
+  } else {
+    statusEl.className = "status live"; statusText.textContent = "Live";
+    bannerEl.className = "banner";
+  }
+
+  $("lim-buy").textContent = state.threshold.toFixed(2);
+  $("lim-sell").textContent = state.threshold.toFixed(2);
+
+  // leaderboard
+  $("leaderboard").innerHTML = state.ranked.map(([c,v], i)=>{
+    const w = Math.max(2, Math.min(100, v/9*100));
+    const m = state.momentum[c] || {pct:0, state:""};
+    const tag = m.state ? `<span class="mtag ${m.state}">${m.state}</span>` : "";
+    return `<div class="lb-row" data-ccy="${c}">
+      <div class="lb-rank">${i+1}</div>
+      <div class="chip"><span class="swatch" style="background:${cvar(c)}"></span>${c}</div>
+      <div class="lb-track"><div class="lb-fill" style="width:${w}%;background:${cvar(c)}"></div></div>
+      <div class="lb-val">${v.toFixed(2)}${tag}</div>
+    </div>`;
+  }).join("");
+  [...$("leaderboard").children].forEach(row=>{
+    const c = row.dataset.ccy, m = state.momentum[c]||{pct:0,state:""};
+    bindTip(row, ()=>`<div class="tt">${c} · ${NAMES[c]}</div>
+      <div class="tr">Strength index<b>${state.strength[c].toFixed(2)} / 9</b></div>
+      <div class="tr">Momentum<b>${(m.pct*100).toFixed(1)}%</b></div>
+      <div class="tr">State<b>${m.state||"neutral"}</b></div>`);
+  });
+
+  // momentum cards (fixed order)
+  $("momentum").innerHTML = CCY_ORDER.map(c=>{
+    const m = state.momentum[c] || {pct:0, state:""};
+    const pct = m.pct*100;
+    const st = m.state || "NEUTRAL";
+    const col = st==="STRONG" ? "var(--good)" : st==="WEAK" ? "var(--critical)" : "var(--neutral)";
+    return `<div class="mcard" style="border-left-color:${cvar(c)}">
+      <div class="top"><span class="code chip"><span class="swatch" style="background:${cvar(c)}"></span>${c}</span>
+        <span class="name">${NAMES[c]}</span></div>
+      <div class="big">${pct.toFixed(0)}<small>%</small></div>
+      <div class="mbar"><div style="width:${pct.toFixed(1)}%;background:${col}"></div></div>
+      <div class="idx">Index <b style="color:var(--ink)">${state.strength[c].toFixed(2)}</b>
+        · <span class="state st-${st}">${st}</span></div>
+    </div>`;
+  }).join("");
+
+  renderTable();
+  const dt = state.ts ? new Date(state.ts*1000).toLocaleTimeString() : "n/a";
+  $("clock").textContent = dt;
+  $("foot").textContent = `Threshold ${state.threshold.toFixed(2)} · 28 pairs + XAUUSD · last tick ${dt}`;
+}
+
+function renderTable(){
+  const s = lastState; if(!s) return;
+  let rows = s.pairs.slice();
+  if (s.gold) rows.push(s.gold);
+
+  if (filter !== "ALL") rows = rows.filter(p => p.active && p.signal === filter);
+
+  if (sortKey){
+    rows.sort((a,b)=>{
+      let av=a[sortKey], bv=b[sortKey];
+      if (sortKey==="pair" || sortKey==="signal"){ av=av||""; bv=bv||""; return av<bv?-sortDir:av>bv?sortDir:0; }
+      av = (av===null||av===undefined)?-Infinity:av; bv=(bv===null||bv===undefined)?-Infinity:bv;
+      return (av-bv)*sortDir;
+    });
+  }
+
+  const body = $("signals-body");
+  body.innerHTML = rows.map(p=>{
+    const gold = p.pair==="XAUUSD";
+    const accent = cvar(p.base);
+    if (!p.active){
+      return `<tr class="inactive ${gold?"gold":""}" style="border-left-color:${accent}">
+        <td class="pair-name">${p.pair}</td>
+        <td colspan="6">inactive — no range data (show it in MT4 Market&nbsp;Watch)</td></tr>`;
+    }
+    const jpy = p.pair.endsWith("JPY");
+    const pos = p.buy!=null ? p.buy*100 : null;
+    const dcls = p.delta>0.0001?"delta-pos":p.delta<-0.0001?"delta-neg":"delta-zero";
+    const rangeCell = pos===null ? `<td class="num">–</td>` : `<td>
+      <div class="range">
+        <span class="lo">${fmtPrice(p.low,jpy)}</span>
+        <div class="rtrack"><div class="rmark" style="left:${pos.toFixed(1)}%"></div></div>
+        <span class="hi">${fmtPrice(p.high,jpy)}</span>
+      </div>
+    </td>`;
+    return `<tr data-pair="${p.pair}" class="${gold?"gold":""}" style="border-left-color:${accent}">
+      <td class="pair-name">${p.base}<span class="qtag">${p.quote}</span></td>
+      <td><span class="sig sig-${p.signal}">${p.signal}</span></td>
+      <td class="num"><span class="meter-cell"><span class="swatch" style="background:${accent}"></span>${p.sBase.toFixed(2)}</span></td>
+      <td class="num"><span class="meter-cell"><span class="swatch" style="background:${cvar(p.quote)}"></span>${p.sQuote.toFixed(2)}</span></td>
+      <td class="num ${dcls}">${p.delta>0?"+":""}${p.delta.toFixed(2)}</td>
+      ${rangeCell}
+      <td class="num">${p.spread!=null?p.spread:"–"}</td>
+    </tr>`;
+  }).join("");
+
+  // row tooltips
+  [...body.querySelectorAll("tr[data-pair]")].forEach(tr=>{
+    const p = rows.find(x=>x.pair===tr.dataset.pair); if(!p) return;
+    const jpy = p.pair.endsWith("JPY");
+    bindTip(tr, ()=>`<div class="tt">${p.pair} · ${p.signal}</div>
+      <div class="tr">${p.base} strength<b>${p.sBase.toFixed(2)}</b></div>
+      <div class="tr">${p.quote} strength<b>${p.sQuote.toFixed(2)}</b></div>
+      <div class="tr">Δ (base − quote)<b>${p.delta>0?"+":""}${p.delta.toFixed(2)}</b></div>
+      <div class="tr">High<b>${fmtPrice(p.high,jpy)}</b></div>
+      <div class="tr">Bid<b>${fmtPrice(p.bid,jpy)}</b></div>
+      <div class="tr">Ask<b>${fmtPrice(p.ask,jpy)}</b></div>
+      <div class="tr">Low<b>${fmtPrice(p.low,jpy)}</b></div>
+      <div class="tr">Position<b>buy ${(p.buy*100).toFixed(0)}% · sell ${(p.sell*100).toFixed(0)}%</b></div>
+      <div class="tr">Spread<b>${p.spread!=null?p.spread+" pts":"–"}</b></div>`);
+  });
+
+  // sort arrows
+  document.querySelectorAll(".arw").forEach(a=>a.textContent = a.dataset.for===sortKey ? (sortDir<0?"▼":"▲") : "");
+}
+
+/* ---------- controls ---------- */
+$("pills").addEventListener("click", e=>{
+  const b = e.target.closest(".pill"); if(!b) return;
+  filter = b.dataset.f;
+  [...$("pills").children].forEach(x=>x.classList.toggle("on", x===b));
+  renderTable();
+});
+document.querySelectorAll("th.sortable").forEach(th=>{
+  th.addEventListener("click", ()=>{
+    const k = th.dataset.sort;
+    if (sortKey===k) sortDir=-sortDir; else { sortKey=k; sortDir = (k==="pair"||k==="signal")?1:-1; }
+    renderTable();
+  });
+});
+
+// theme
+const themeBtn = $("theme");
+function applyTheme(t){ document.documentElement.setAttribute("data-theme", t); try{localStorage.setItem("meter-theme",t);}catch(e){} if(lastState) render(lastState); }
+themeBtn.addEventListener("click", ()=>{
+  const cur = document.documentElement.getAttribute("data-theme");
+  applyTheme(cur==="dark"?"light":"dark");
+});
+(function initTheme(){
+  let t; try{ t = localStorage.getItem("meter-theme"); }catch(e){}
+  if(!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light":"dark";
+  document.documentElement.setAttribute("data-theme", t);
+})();
+
+/* ---------- websocket ---------- */
+let ws=null, retry=null;
+function connect(){
+  const proto = location.protocol==="https:"?"wss:":"ws:";
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onmessage = ev=>{ try{ render(JSON.parse(ev.data)); }catch(e){ console.error("bad message", e); } };
+  ws.onclose = ()=>{
+    statusEl.className="status down"; statusText.textContent="Disconnected";
+    bannerEl.className="banner show"; bannerEl.innerHTML="⚠&nbsp; DISCONNECTED — retrying connection to the bridge…";
+    clearTimeout(retry); retry=setTimeout(connect, 1500);
+  };
+  ws.onerror = ()=>ws.close();
+}
+connect();
+</script>
+</body>
+</html>

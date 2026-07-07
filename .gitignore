@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Claude Code local settings (contains local paths / machine-specific allowlist)
+.claude/
+.claude/settings.local.json
+
+# Runtime
+server.log
+
+# Third-party reference material — not redistributable, keep out of the repo
+Excel-Currency-Meter-2026.xlsx
+How-to-use-the-excel-File.pdf

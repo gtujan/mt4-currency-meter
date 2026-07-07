@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchDaemon for the Currency Meter bridge server.
+
+  Runs bridge/server.py as root at boot so it can bind port 80 (the port
+  MT4-under-Wine requires), restarts it if it ever exits, and logs to
+  server.log. Once installed you never start it by hand or type sudo again.
+
+  Binds 0.0.0.0 (all interfaces) on purpose: a daemon should keep working
+  when your DHCP LAN IP changes, without needing a restart. If you'd rather
+  it claim port 80 only on your LAN IP (leaving 127.0.0.1:80 free for other
+  local web apps), change METER_HOST below to that fixed IP -- but then
+  you'll need to reload the daemon whenever the IP changes.
+
+  Install / manage: see the commands your assistant printed, or:
+    sudo cp com.currencymeter.bridge.plist /Library/LaunchDaemons/
+    sudo chown root:wheel /Library/LaunchDaemons/com.currencymeter.bridge.plist
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.currencymeter.bridge.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.currencymeter.bridge</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/ABSOLUTE/PATH/TO/currency_meter/.venv/bin/python</string>
+    <string>/ABSOLUTE/PATH/TO/currency_meter/bridge/server.py</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>METER_HOST</key>
+    <string>0.0.0.0</string>
+    <key>METER_PORT</key>
+    <string>80</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/ABSOLUTE/PATH/TO/currency_meter</string>
+
+  <!-- Start at boot. -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Restart if it exits/crashes. ThrottleInterval avoids a tight crash
+       loop if startup fails (waits 10s between relaunch attempts). -->
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/ABSOLUTE/PATH/TO/currency_meter/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/ABSOLUTE/PATH/TO/currency_meter/server.log</string>
+</dict>
+</plist>
