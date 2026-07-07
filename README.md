@@ -3,7 +3,7 @@
 A small web app, fed live from MetaTrader 4 over native `WebRequest()` HTTP
 POST — no DDE, no ZeroMQ, no DLL. All math (ranks, strengths, signals,
 gauges, momentum) runs in Python (`bridge/meter.py`), fetching bid and ask values from MT4 and 
-renders it on the browser. No need for DDE or Excel.
+renders it on the browser. No need for Excel.
 
 ## Install
 
